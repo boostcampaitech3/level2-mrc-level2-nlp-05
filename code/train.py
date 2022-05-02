@@ -18,6 +18,10 @@ from transformers import (
 )
 from utils_qa import check_no_error, postprocess_qa_predictions
 
+import wandb
+from datetime import datetime
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -97,6 +101,11 @@ def run_mrc(
     tokenizer,
     model,
 ) -> NoReturn:
+
+    wandb.init(project="level2-mrc", entity="team-oeanhdoejo")
+
+    USER_NAME = "Minji"  # user name 변경 후 사용
+    dt_string = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
 
     # dataset을 전처리합니다.
     # training과 evaluation에서 사용되는 전처리는 아주 조금 다른 형태를 가집니다.
@@ -311,6 +320,9 @@ def run_mrc(
         post_process_function=post_processing_function,
         compute_metrics=compute_metrics,
     )
+    
+    wandb.run.name = f"{USER_NAME}-{model_args.model_name_or_path}-{training_args.per_device_train_batch_size}-{training_args.num_train_epochs}-{dt_string}"
+    wandb.config.update(training_args)
 
     # Training
     if training_args.do_train:
