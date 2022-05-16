@@ -1,10 +1,20 @@
 import logging
 import os
 import sys
+import re
 from typing import NoReturn
 
 from arguments import DataTrainingArguments, ModelArguments
-from datasets import DatasetDict, load_from_disk, load_metric
+from datasets import (
+    Dataset,
+    DatasetDict,
+    Features,
+    Sequence,
+    Value,
+    load_metric,
+    load_from_disk,
+    load_dataset,
+)
 from trainer_qa import QuestionAnsweringTrainer
 from transformers import (
     AutoConfig,
@@ -20,6 +30,7 @@ from utils_qa import check_no_error, postprocess_qa_predictions
 
 import wandb
 from datetime import datetime
+import pandas as pd
 
 
 logger = logging.getLogger(__name__)
@@ -28,6 +39,10 @@ logger = logging.getLogger(__name__)
 def main():
     # 가능한 arguments 들은 ./arguments.py 나 transformer package 안의 src/transformers/training_args.py 에서 확인 가능합니다.
     # --help flag 를 실행시켜서 확인할 수 도 있습니다.
+    sys.argv += '''
+                --output_dir /opt/ml/input/custom_code/models/roberta-large-0512 
+                --do_train --do_eval --report_to wandb 
+                '''.split()
 
     parser = HfArgumentParser(
         (ModelArguments, DataTrainingArguments, TrainingArguments)
@@ -41,6 +56,12 @@ def main():
 
     print(f"model is from {model_args.model_name_or_path}")
     print(f"data is from {data_args.dataset_name}")
+
+    training_args.save_total_limit=5
+    
+    # training_args.per_device_train_batch_size = 16
+    # training_args.per_device_eval_batch_size = 16
+    # training_args.num_train_epochs = 5
 
     # logging 설정
     logging.basicConfig(
@@ -56,6 +77,7 @@ def main():
     set_seed(training_args.seed)
 
     datasets = load_from_disk(data_args.dataset_name)
+    datasets = concat_data(datasets)
     print(datasets)
 
     # AutoConfig를 이용하여 pretrained model 과 tokenizer를 불러옵니다.
@@ -79,6 +101,7 @@ def main():
         from_tf=bool(".ckpt" in model_args.model_name_or_path),
         config=config,
     )
+    print(model)
 
     print(
         type(training_args),
@@ -92,6 +115,38 @@ def main():
     if training_args.do_train or training_args.do_eval:
         run_mrc(data_args, training_args, model_args, datasets, tokenizer, model)
 
+
+def concat_data(dataset):
+    korquad_dataset = load_dataset("squad_kor_v1")['train']
+    
+    train = pd.DataFrame(dataset['train'])
+    val = pd.DataFrame(dataset['validation'])
+    korquad = pd.DataFrame(korquad_dataset)
+    
+    # datasets = pd.concat([train, val])
+    train = train[['answers','context','id','question']]
+    val = val[['answers','context','id','question']]
+    korquad = korquad[['answers','context','id','question']]
+    datasets = pd.concat([train,korquad])
+
+    f = Features(
+        {
+            "answers": Sequence(
+                feature={
+                    "text": Value(dtype="string", id=None),
+                    "answer_start": Value(dtype="int32", id=None),
+                },
+                length=-1,
+                id=None,
+            ),
+            "context": Value(dtype="string", id=None),
+            "id": Value(dtype="string", id=None),
+            "question": Value(dtype="string", id=None),
+        }
+    )
+    datasets = DatasetDict({"train": Dataset.from_pandas(datasets, features=f),
+                            "validation":Dataset.from_pandas(val, features=f)})
+    return datasets
 
 def run_mrc(
     data_args: DataTrainingArguments,
@@ -120,6 +175,7 @@ def run_mrc(
 
     # Padding에 대한 옵션을 설정합니다.
     # (question|context) 혹은 (context|question)로 세팅 가능합니다.
+    # tokenizer.padding_side="left"
     pad_on_right = tokenizer.padding_side == "right"
 
     # 오류가 있는지 확인합니다.
@@ -127,10 +183,21 @@ def run_mrc(
         data_args, training_args, datasets, tokenizer
     )
 
+    # def preprocess(text):
+    #     text = text.replace('\\n', ' ')
+    #     text = text.replace('\n', ' ')
+    #     text = re.sub(' +', ' ', text)
+    #     return text
+
     # Train preprocessing / 전처리를 진행합니다.
     def prepare_train_features(examples):
         # truncation과 padding(length가 짧을때만)을 통해 toknization을 진행하며, stride를 이용하여 overflow를 유지합니다.
         # 각 example들은 이전의 context와 조금씩 겹치게됩니다.
+        # a = examples[question_column_name if pad_on_right else context_column_name]
+        # b = examples[context_column_name if pad_on_right else question_column_name]
+        # a = list(map(preprocess, a))
+        # b = list(map(preprocess, b))
+
         tokenized_examples = tokenizer(
             examples[question_column_name if pad_on_right else context_column_name],
             examples[context_column_name if pad_on_right else question_column_name],
@@ -139,7 +206,7 @@ def run_mrc(
             stride=data_args.doc_stride,
             return_overflowing_tokens=True,
             return_offsets_mapping=True,
-            # return_token_type_ids=False, # roberta모델을 사용할 경우 False, bert를 사용할 경우 True로 표기해야합니다.
+            return_token_type_ids=False, # roberta모델을 사용할 경우 False, bert를 사용할 경우 True로 표기해야합니다.
             padding="max_length" if data_args.pad_to_max_length else False,
         )
 
@@ -223,6 +290,11 @@ def run_mrc(
     def prepare_validation_features(examples):
         # truncation과 padding(length가 짧을때만)을 통해 toknization을 진행하며, stride를 이용하여 overflow를 유지합니다.
         # 각 example들은 이전의 context와 조금씩 겹치게됩니다.
+        # a = examples[question_column_name if pad_on_right else context_column_name]
+        # b = examples[context_column_name if pad_on_right else question_column_name]
+        # a = list(map(preprocess, a))
+        # b = list(map(preprocess, b))
+
         tokenized_examples = tokenizer(
             examples[question_column_name if pad_on_right else context_column_name],
             examples[context_column_name if pad_on_right else question_column_name],
@@ -231,7 +303,7 @@ def run_mrc(
             stride=data_args.doc_stride,
             return_overflowing_tokens=True,
             return_offsets_mapping=True,
-            # return_token_type_ids=False, # roberta모델을 사용할 경우 False, bert를 사용할 경우 True로 표기해야합니다.
+            return_token_type_ids=False, # roberta모델을 사용할 경우 False, bert를 사용할 경우 True로 표기해야합니다.
             padding="max_length" if data_args.pad_to_max_length else False,
         )
 
@@ -320,7 +392,7 @@ def run_mrc(
         post_process_function=post_processing_function,
         compute_metrics=compute_metrics,
     )
-    
+
     wandb.run.name = f"{USER_NAME}-{model_args.model_name_or_path}-{training_args.per_device_train_batch_size}-{training_args.num_train_epochs}-{dt_string}"
     wandb.config.update(training_args)
 
