@@ -45,7 +45,7 @@ ODQA를 수행하기 위해서 retriever-reader 구조를 가지는 two-stage �
 - `answers`: 답변에 대한 정보. 하나의 질문에 하나의 답변만 존재함
   - `answer_start`: 답변의 시작 위치
   - `text`: 답변의 텍스트
-- `context`: 답변이 포함된 뭇너
+- `context`: 답변이 포함된 문서
 - `title`: 문서의 제목
 - `document_id`: 문서의 고유 id
     
