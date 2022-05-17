@@ -19,23 +19,24 @@
 
 ## 문제 개요
 <img width="1980" alt="문제 정의" src="https://user-images.githubusercontent.com/59854630/168844994-1a226d63-e75e-47c6-b1ac-475d2eff8e69.png">
-본 프로젝트에서는 궁금한 것이 생겼을 때 구글링으로 답을 찾는 것과 유사한 시스템을 만들어보고자, Open Domain Question Answering(ODQA) 태스크를 수행했습니다. QA는 질문에 대한 답을 내는 인공지능 모델을 만드는 연구 분야입니다. 여기에 지문이 주어지고 답을 찾는 것이 아니라, 사전에 구축해 둔 지식 데이터베이스에서 질문과 관련이 있는 문서를 찾고 답을 아웃풋하는 것이 ODQA 태스크입니다. ODQA를 수행하기 위해서 retriever-reader 구조를 가지는 two-stage 모델 구조를 사용했습니다. retriever는 질문과 관련된 문서들을 찾아오는 단계이며, 다음으로는 찾아온 문서들을 읽고 질문에 대한 답을 찾거나 만드는 reader 단계입니다. 두 단계의 모델을 구성하고 훈련한 후 두 단계를 연결하고 통합하는 과정을 통해 태스크 수행이 가능합니다. 
+본 프로젝트에서는 궁금한 것이 생겼을 때 구글링으로 답을 찾는 것과 유사한 시스템을 만들어보고자, Open Domain Question Answering(ODQA) 태스크를 수행했습니다.      
+QA는 질문에 대한 답을 내는 인공지능 모델을 만드는 연구 분야입니다. 여기에 지문이 주어지고 답을 찾는 것이 아니라, 사전에 구축해 둔 지식 데이터베이스에서 질문과 관련이 있는 문서를 찾고 답을 아웃풋하는 것이 ODQA 태스크입니다.     
+ODQA를 수행하기 위해서 retriever-reader 구조를 가지는 two-stage 모델 구조를 사용했습니다. retriever는 질문과 관련된 문서들을 찾아오는 단계이며, 다음으로는 찾아온 문서들을 읽고 질문에 대한 답을 찾거나 만드는 reader 단계입니다. 두 단계의 모델을 구성하고 훈련한 후 두 단계를 연결하고 통합하는 과정을 통해 태스크 수행이 가능합니다. 
 
 ## 프로젝트 수행 절차 및 방법
 
 <img width="1590" alt="프로젝트수행" src="https://user-images.githubusercontent.com/59854630/168845131-0c9f0a98-b179-4568-a3b6-7fc7b4491a7a.png">
 
 ### MODELS
-- KLUE-BERT-base
-    - typed entity marker (special token)
-    - TAPT
-- KLUE-RoBERTa-large
-    - Typed Entity Marker (punct)
-    - Multi-Sentence
-    - LSTM
-- SOTA
-    - Curriculum Learning
-    - RECENT
+- Retriever
+    - Sparse retrieval: tf-idf, bm25
+    - Dense passage retrieval
+    - Passage: title + context
+- Linking MRC and retrieval
+    - Doc score
+- Reader
+    - klue/bert-base
+    - klue/roberta-large
 
 ## 데이터셋 구조
 
